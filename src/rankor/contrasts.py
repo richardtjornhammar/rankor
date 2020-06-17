@@ -13,7 +13,18 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
-from rankor.quantification import *
+import pandas as pd
+import numpy as np
 
-if __name__ == '__main__' :
-    print ( 'WELCOME TO RANKOR' )
+def contrasted_signal ( edf ) :
+    # NOT NECESSARILY VALID
+    B       = np.mean ( np.mean( edf ) )
+    l2_cont = lambda x,B : np.abs( ( 2**x - 2**B )/( 2**x + 2**B ) ) * x
+    cdf = edf .apply( lambda x : l2_cont(x,np.mean(x)) )
+    return ( cdf )
+
+# REGULAR CONTRAST
+contrast   = lambda A,B : ( A-B )/( A+B )
+e_flatness = lambda x   : np.exp(np.mean(np.log(x),0))/np.mean(x,0)
+e_contrast = lambda x   : 1 - e_flatness(x)
+
