@@ -48,15 +48,18 @@ def create_dag_representation_df ( pathway_file = '../data/GROUPDEFINITIONS.gmt'
     dag_df = pd.concat([pdf.T,pdf_.T]).T
     return ( dag_df , tree )
 
+
 def HierarchicalEnrichment (
             analyte_df , dag_df = None , dag_level_label = 'DAG,l' ,
             ancestors_id_label = 'aid' , id_name = None , threshold = 0.05 ,
             enrich_label = None , analyte_name_label = 'analytes' ,
             item_delimiter = ',' , alexa_elim = False , alternative = 'two-sided' ,
             remove_analytes = set(['']) , group_defs = None , pc_file = None ,
-            fallback_sig_type = ',r', power = 2., use_global_params = False
+            fallback_sig_type = ',r', power = 2., use_global_params = False,
+            centered = -1 , local_bh_correction = False 
         ) :
     from rankor.reducer import hyper_rdf, hyper_params
+    #rankor.
     #
     # NEEDS AN ANALYTE FRAME :
     #     INCLUDING P VALUES OF ANALYTES (IF ENRICH LABEL IS SET
@@ -69,8 +72,8 @@ def HierarchicalEnrichment (
     #     FILE
     #
     global_mean , global_std = None , None
+    sig_type = fallback_sig_type
     if enrich_label is None :
-        sig_type = fallback_sig_type
         #
         # IF TRUE DO NOT USE LOCAL PARAMETERS FOR THE P VALUES
         if use_global_params and not fallback_sig_type == ',r' :
@@ -80,7 +83,12 @@ def HierarchicalEnrichment (
     AllAnalytes = set( analyte_df.index.values ) ; nidx = len( AllAnalytes )
     SigAnalytes = None
     if not enrich_label is None :
-        SigAnalytes = set( analyte_df.iloc[ (analyte_df.loc[:,enrich_label].values < tolerance), : ].index.values )
+        if enrich_label+sig_type in set( analyte_df.columns.values ) :
+            SigAnalytes = set( analyte_df.iloc[ (analyte_df.loc[:,enrich_label+sig_type].values < tolerance), : ].index.values )
+        else :
+            print ( 'ERROR : COULD NOT FIND QUANTIFICATION LABEL' )
+            exit ( 1 )
+            
         if len( AllAnalytes ) == len( SigAnalytes ) :
             print ( 'WARNING : THIS STATISTICAL TEST WILL BE NONSENSE' )
             print ( 'WARNING : TRY A DIFFERENT THRESHOLD' )
@@ -114,16 +122,23 @@ def HierarchicalEnrichment (
             if node in marked_analytes :
                 unused_group = group.loc[ list( set(group.index.values) - marked_analytes[node] ) ]
                 group = unused_group
-            L_ = len( group ) ; str_analytes=','.join(group.index.values)
+            L_ = len( group ) ; str_analytes = ','.join(group.index.values)
             if L_ > 0 :
-                used_analytes[node] = ','.join( group.index.values )
+                used_analytes[node] = ',' .join ( group.index.values )
                 SigAnalytes_ = SigAnalytes
                 if SigAnalytes is None :
                      hdf_ = hyper_rdf ( analyte_df.loc[group.index.values,:] ,
                                         power = power , label = 'generic',
-                                        MEAN = global_mean , STD = global_std )
-                     
-                     SigAnalytes_ = set ( hdf_.index.values[ [ v < tolerance for v in hdf_.loc[:,'generic'+sig_type].values ] ] )
+                                        MEAN = global_mean , STD = global_std ,
+                                        centered = centered )
+                loc_tol = tolerance
+                if local_bh_correction :
+                    loc_tol = loc_tol / float(L_)
+                    if not enrich_label is None :
+                        bSel = [ v < loc_tol for v in analyte_df.loc[group.index.values,enrich_label+sig_type].values ]
+                        SigAnalytes_ = set ( group.index.values [ [i for i in range(L_) if bSel[i]] ] )
+                    else :
+                        SigAnalytes_ = set ( hdf_.index.values[ [ v < loc_tol for v in hdf_.loc[:,'generic'+sig_type].values ] ] )
                      
                 pv , odds = group_significance ( group , AllAnalytes = AllAnalytes,
                                              SigAnalytes = SigAnalytes_ , tolerance = tolerance ,
@@ -150,6 +165,7 @@ def HierarchicalEnrichment (
     df['Included analytes,ids'] = [ used_analytes[idx] if idx in used_analytes else '' for idx in df.index.values ]
     df = df.dropna()
     return ( df )
+
 
 
 if __name__ == '__main__' :

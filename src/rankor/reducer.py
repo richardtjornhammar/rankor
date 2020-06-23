@@ -37,12 +37,32 @@ def svd_reduced_mean ( x,axis=0,keep=[0] ) :
                 return ( xred )
     return ( x )
 
-def hyper_params ( df_ , label = 'generic' , sep = ',', power=1. ):
+from sklearn.decomposition import PCA
+dimred = PCA ( n_components = 1 )
+def pca_reduced_mean( x ) :
+    if True :
+        if len ( np.shape(x) ) > 1 :
+            Xnew = dimred.fit_transform( x.T )
+            xred = Xnew . T [0] + np.mean(np.mean(x))
+            if 'pandas' in str(type(x)) :
+                if not 'series' in str(type(x)) :
+                    xname = x.index.values[0]
+                    return ( pd.DataFrame( [xred] , index=[xname] , columns=x.columns ) )
+                else :
+                    xname = x.name
+                    return ( pd.Series( xred , name=xname , index=x.columns ) )
+    return ( x )
+
+def reduction ( a , power , centered=-1 ) :
+    if centered>0 :
+        a = ( a.T-np.mean(a,1) ).T
+    return(  np.linalg.svd ( a**power , full_matrices=False ) )
+
+def hyper_params ( df_ , label = 'generic' , sep = ',' , power=1., centered=-1 ):
     #
     idx_ = df_.index.values
     N_s = len ( df_.columns )
-    u,s,vt = np.linalg.svd ( df_.values**power , full_matrices=False )
-    #
+    u,s,vt = reduction( df_.values , power , centered=centered )
     rdf_ = pd.Series ( np.sum(u**2,1) , index=idx_ , name = label+sep+"u" )
     rdf_ = pd.concat ( [ pd.DataFrame(rdf_) ,
                          pd.DataFrame( pd.Series( np.mean( df_.values,1 ) ,
@@ -61,14 +81,13 @@ def hyper_params ( df_ , label = 'generic' , sep = ',', power=1. ):
 
 
 def hyper_rdf ( df_ , label = 'generic' , sep = ',' , power=1. ,
-                diagnostic_output = False , MEAN=None , STD=None ) :
+                diagnostic_output = False , MEAN=None , STD=None , centered=-1 ) :
     #
     idx_= df_.index.values
     N_s = len ( df_.columns )
-    u,s,vt = np.linalg.svd ( df_.values**power , full_matrices=False )
-    #
-    rdf_ = pd.Series ( np.sum(u**2,1) , index=idx_ , name = label+sep+"u" )
-    rdf_ = pd.concat ( [ pd.DataFrame(rdf_) ,
+    u,s,vt = reduction ( df_.values , power , centered=centered )
+    rdf_ = pd.Series ( np.sum( ( u )**2,1 ) , index=idx_ , name = label+sep+"u" )
+    rdf_ = pd.concat ( [ pd.DataFrame( rdf_ ) ,
                          pd.DataFrame( pd.Series( np.mean( df_.values,1 ) ,
                                                   index = idx_ , name=label+sep+"m") ) ] , axis=1 )
     w_ = rdf_ .loc[ :,label+sep+"u" ].values
@@ -115,8 +134,8 @@ def hyper_rdf ( df_ , label = 'generic' , sep = ',' , power=1. ,
         d_mod_y = locd( lv , np.mean(lv) , np.std(lv) )
         rem_y = [ (y_-m_) for (y_,m_) in zip(y, locd(0.5*(x[1:]+x[:-1]),np.mean(lv),np.std(lv))) ]
         prc_y = [ 100.*np.abs( contrast(y_,m_) ) for (y_,m_) in zip(y, locd(0.5*(x[1:]+x[:-1]),np.mean(lv),np.std(lv))) ]
-        RMSD = np.sqrt(np.sum([ ry**2 for ry in rem_y ]))
-        PMAE = np.mean(prc_y)
+        RMSD  = np.sqrt(np.sum([ ry**2 for ry in rem_y ]))
+        PMAE  = np.mean(prc_y)
     #
     df0_ .loc[ : , 'pvalues' ] = ps
     #
@@ -135,6 +154,7 @@ def hyper_rdf ( df_ , label = 'generic' , sep = ',' , power=1. ,
 if __name__ == '__main__' :
     #
     print ( 'REDUCER :: TESTS ' )
+    #
     a   = 2*np.random.rand(10)
     b   = 4*np.random.rand(10)
     X   = [ [*(a[:5]+1),*a[5:]],[*(b[:5]+3),*(b[5:])] ]
@@ -143,3 +163,6 @@ if __name__ == '__main__' :
     print ( Xdf )
     print ( svd_reduced_mean ( X ) )
     print ( svd_reduced_mean ( Xdf ) )
+    a2 = np.array([[2,2,2,1,1,1,2,3,2,2,3,2,3],[1.9,1.8,2.1,1.1,8.,1.2,2.2,3.5,2.0,2.0,3.1,2.1,2.9]])
+    print ( dimreduced_expression( Xdf )) #np.array(X)) )
+    
